@@ -9,7 +9,7 @@ const interactive = require('@mixer/interactive-node');
 class MixerNode extends EventEmmiter {
     constructor() {
         super();
-
+        this.participants = {};
         // create OAuth client
         this.oauth = new OAuthClient({
             clientId: config.MixerGameId,
@@ -73,12 +73,42 @@ class MixerNode extends EventEmmiter {
         this.game = new interactive.GameClient();
 
         // subscribing to events
-        this.game.on('open', () => console.log('Connected to interactive'));
-        this.game.on('message', (sData) => {
+        this.game.on('open', () => {
+            console.log('Connected to interactive');
+            this.game.ready(true);
+            
 
+            
+            this.game.getScenes().then(scenes => {
+                var controls = scenes.scenes[0].controls;
+                controls.forEach(control => {
+                    if (control.kind === 'button') {
+                        
+                        // control.on('mousedown', (event, participant) => {
+                        //     console.log(event);
+                        //     console.log(participant);
+                        // });
+                    }
+                });                
+            });
+        });
+
+        this.game.state.on('participantJoin', p => {
+            console.log(this.game.state.participants)
+        });
+
+        this.game.on('message', (sData) => {
             var data = JSON.parse(sData);            
-            if (data.method === "giveInput") {
-                console.log('<<<', data.params.input);
+            if (data.method === "giveInput") { 
+                var input = data.params.input;               
+                if (input.event === 'mousedown') {
+                    this.emit('event', {
+                        eventType: 'onClick',
+                        eventData: {
+                            buttonID: input.controlID
+                        } 
+                    });
+                }
             }
         });
         
@@ -87,9 +117,7 @@ class MixerNode extends EventEmmiter {
         this.game.open({
             authToken: token.data.accessToken,
             versionId: config.ClientId,
-        }).then(() => {
-            this.game.ready(true);
-        })
+        });
     }
 }
 
