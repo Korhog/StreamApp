@@ -44,6 +44,9 @@ class MixerChat extends EventEmmiter {
         this.socket.on('ChatMessage', data => {
             console.log(data);
             this.emit('event', {
+                userInfo: {
+                    ascensionLevel: data.user_ascension_level
+                },
                 message: data.message
             });
         });

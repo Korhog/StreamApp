@@ -57,6 +57,15 @@ class MixerNode extends EventEmmiter {
         .catch(err => console.log(err));
     }
 
+    getUserInfo(participantID) {
+        var userInfo = this.game.state.getParticipantBy(participantID);
+        if (userInfo) {
+            return {
+                level: userInfo.level
+            }
+        }
+    }
+
     async saveToken(token) {
         var sToken = JSON.stringify(token);
         return fs.writeFile('local.token', sToken, (err) => {
@@ -101,10 +110,11 @@ class MixerNode extends EventEmmiter {
             var data = JSON.parse(sData);            
             if (data.method === "giveInput") { 
                 var input = data.params.input;               
-                if (input.event === 'mousedown') {
+                if (input.event === 'mousedown') {                  
                     this.emit('event', {
                         eventType: 'onClick',
                         eventData: {
+                            userInfo: this.getUserInfo(data.params.participantID),
                             buttonID: input.controlID
                         } 
                     });
