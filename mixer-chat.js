@@ -43,13 +43,38 @@ class MixerChat extends EventEmmiter {
                     // Listen for chat messages. Note you will also receive your own!
         this.socket.on('ChatMessage', data => {
             console.log(data);
+            if (data.message.message[0].type === 'image') {
+                this.emit('event', {
+                    eventType: 'Skill',
+                    userInfo: {
+                        ascensionLevel: data.user_ascension_level
+                    },
+                    skill: data.message.message[0].data
+                });
+                return;
+            }
+
             this.emit('event', {
+                eventType: 'ChatMessage',
                 userInfo: {
                     ascensionLevel: data.user_ascension_level
                 },
                 message: data.message
             });
         });
+
+        this.socket.on('UserJoin', data => {
+            this.emit('event', {
+                eventType: 'UserJoin'
+            });
+        });
+       
+        this.socket.on('SkillAttribution', data => {
+            this.emit('event', {
+                eventType: 'Skill'
+            });
+        });
+    
 
         // Listen for socket errors. You will need to handle these here.
         this.socket.on('error', error => console.error(error));  

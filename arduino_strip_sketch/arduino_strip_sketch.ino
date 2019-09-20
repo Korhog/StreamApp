@@ -3,11 +3,31 @@
 #define SIZE NUM_LEDS - 1
 #define DIN 6
 
+// STATES OF STATE MACHINE
+#define STATE_RAINBOW 0
+
+// STATES OF MIX
+#define MIX_NONE 0
+#define MIX_F 1
+#define MIX_B 2
+#define MIX_STILL 3
+
+
+short state = STATE_RAINBOW;
+
 CRGB leds[NUM_LEDS];
 CRGB buff[NUM_LEDS];
 
 float offset = 0.0f;
-float s = 53.0f / 350.0f;
+float s = 53.0f / 850.0f;
+
+// mix section
+float mix = 1.0f;
+int mix_still = 2000;
+float mix_step = 0.01f;
+short mix_state = MIX_B;
+
+CRGB mix_color = CRGB::Black;
 
 void setup() { 
   Serial.begin(9600);
@@ -15,12 +35,79 @@ void setup() {
   FastLED.show();
   
   FeelBuffAsRainbow(buff);
-  Feel(CRGB::Red);
-  delay(1000);
 }
 
-void loop() {
-  // 
+void loop() { 
+  ProcessInput();
+  ProcessMix();
+  
+  switch(state) {
+    case STATE_RAINBOW:
+      ProcessRainbow();
+      break;
+  }    
+
+   FastLED.show();
+   delay(10);
+}
+
+void ProcessMix() {
+  switch(mix_state) {
+    case MIX_F:
+      // move forward
+      if (mix >= 1.0f){
+        mix = 1.0f;
+        mix_state = MIX_STILL;
+        break;
+      }
+    
+      mix += mix_step;      
+      break;
+    case MIX_B:
+      // move back
+      if (mix <= 0.0f){
+        mix_state = MIX_NONE;
+        mix_color = CRGB::Black;
+        mix = 0.0f;
+        break;
+      }
+    
+      mix -= mix_step; 
+      break;
+    case MIX_STILL:
+      delay(mix_still);
+      mix_state = MIX_B;
+      break;
+  }  
+}
+
+void ProcessInput() {
+  if (Serial.available() > 0) {
+    char arg = Serial.read();   
+    if (arg == '1') {
+       FadeFrom(CRGB::Red);
+    }
+
+    if (arg == '2') {
+       FadeFrom(CRGB::Green);
+    }
+
+    if (arg == '3') {
+       FadeFrom(CRGB::Aqua);
+    }
+  }
+}
+
+void FadeFrom(CRGB color){
+  if (mix_state != MIX_NONE) {
+    return;
+  }
+  
+  mix_color = color;
+  mix_state = MIX_F;
+}
+
+void ProcessRainbow() {
   offset += s;
   if (offset >= SIZE)
     offset -= SIZE;
@@ -33,8 +120,6 @@ void loop() {
 
     leds[i] = Extract(buff, pos);    
   }
-   FastLED.show();
-   delay(10);
 }
 
 void Feel(CRGB color) {
@@ -47,7 +132,6 @@ void Feel(CRGB color) {
 void Blink(CRGB color) {
   Feel(color);
   delay(500);
-  Feel(CRGB::Black);
 }
 
 CRGB Extract(CRGB* arr, float pos){
@@ -58,19 +142,38 @@ CRGB Extract(CRGB* arr, float pos){
   CRGB colorTo = arr[idxTo];
 
   float k = pos - idxFrom;  
-  return Mix(colorFrom, colorTo, k);
+  CRGB preColor =  Mix(colorFrom, colorTo, k);
+  if (mix_state == MIX_NONE) {
+    return preColor;
+  }
+  
+  return Mix(preColor, mix_color, mix);
 }
 
 /* 
  *  color Mix from A to B. k is position between A and B (0..1)
  */
 CRGB Mix(CRGB colorFrom, CRGB colorTo, float k) {
-    // extract colors 
-  short r = (short)(colorFrom.r + (float)(colorTo.r - colorFrom.r) * k);
-  short g = (short)(colorFrom.g + (float)(colorTo.g - colorFrom.g) * k);
-  short b = (short)(colorFrom.b + (float)(colorTo.b - colorFrom.b) * k);
+  if (k == 0.0f) {
+    return colorFrom;
+  }
+
+  if (k == 1.0f) {
+    return colorTo;
+  }
   
-  return CRGB(r, g, b);  
+    // extract colors 
+  short r = ColorClamp((short)(colorFrom.r + (float)(colorTo.r - colorFrom.r) * k));
+  short g = ColorClamp((short)(colorFrom.g + (float)(colorTo.g - colorFrom.g) * k));
+  short b = ColorClamp((short)(colorFrom.b + (float)(colorTo.b - colorFrom.b) * k));
+    
+  return CRGB(r, g, b);
+}
+
+short ColorClamp(short value){
+  if (value < 0) return 0;
+  if (value > 255) return 255;
+  return value; 
 }
 
 void FeelBuffAsRainbow(CRGB* arr){
@@ -82,20 +185,16 @@ void FeelBuffAsRainbow(CRGB* arr){
   int secSP = 0; // section start position
   int secEP = sectionSize; // section end position
 
-  Serial.print(sectionSize);
-
   CRGB colorFrom = CRGB::Green;
   CRGB colorTo = CRGB::Red;
 
   double x = 1.0 / (double)sectionSize;
   
   for (int i = 0; i < NUM_LEDS; i++) { 
-    section = i * x; // section num;  
-    
-
-    
+    section = i * x; // section num;
     secSP = section * sectionSizeBase;
     secEP = secSP + sectionSizeBase;
+    
     if (section == 6) {      
       secEP = SIZE;  
       sectionSize = SIZE - secSP; 
